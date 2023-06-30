@@ -79,6 +79,7 @@ The code is tested successfully at
 
 ### ROS Setting
 - 1. Install [ROS](http://torch.ch/docs/getting-started.html) on a machine. 
+需要安装jsk_visual
 - 2. Thereafter, [jsk-visualization](https://github.com/jsk-ros-pkg/jsk_visualization) is required to visualize Ground Likelihood Estimation status.
 
 ```bash
@@ -245,5 +246,92 @@ If you have any questions, please let me know:
 - [x] Add own dataset examples
 - [x] Update wiki
 
------
+--------------
+
+
+## Patchwork
+不同的思路, 纯cpp实现，没有深度学习方式，其几何算法是否能更有效的进行特征提取，输入到网络中？
+https://github.com/LimHyungTae/patchwork
+https://github.com/url-kaist/patchwork-plusplus
+[Patchwork++](http://www.guyuehome.com/38829)
+
+地面点云分割主要是:
+- 为了解决找到可通行区域(movable area), 
+- 还可以用于**识别跟踪物体?**, 分割地面点云可以起到降低计算复杂度(大多数都是地面点云，可以作为**预处理阶段**，先去除地面点云，降低后续计算复杂度)
+针对地面的凹凸不平以及斜坡等类别 <br>
+
+分割速度达到40Hz，算法**针对城市环境**
+
+[!patchwork_framework]()
+算法结构
+1. 点云被编码进Concentric Zone Model-based representation(基于同心圆区域模型表示)，使得点云密度分配均匀？计算复杂度低(指同心圆表示计算)   CZM 表示
+2. 之后进行Region-wise Ground Plane Fitting(区域级的地面拟合， R-GPF)， 评估每个区域的地面？
+3. Ground Likelihood Estimation(地面似然/可能性估计， GLE)，以减少假阳率  uprightness直立度，elevation高程，flatness平整度
+地面包括移动物体可通行的区域，草地，人行道等
+
+- 基于高度过滤以及RANSAC的方法无法分割陡坡，颠簸，不均匀，周围物体影响效果
+- 现有地面评估算法时效性问题，不适合预处理
+- 扫描表示(点云表示方式？)
+- elevation map-based 2.5D grid representation 基于高程图的2.5D地图表示, 用来区分是否属于地面点来将3D点云表示为2.5D格式. 无法表征陡坡，在Z变化较快时？ 到底什么是2.5D
+- 深度学习方法在实际应用
+时需要，使用环境与训练环境相近(即模型泛化能力)，传感器配置
+
+
+点云被分为两类地面点云G， 和剩余的所有点的集合Gc
+
+
+#### CZM
+concentric zone model 同心圆模型
+假设真实地面可以在小范围内(small parts)是平坦的
+针对lidar数据本身近密远疏的特点，坐标系划分存在远距离稀疏性(点云太稀疏无法找到接地层)，近距离存在可表示问题(网格太小)
+
+CZM,给网格分配了合适的密度大小，划分为不同区域，每个区域由不同大小的bin(网格)组成。同时计算不复杂。
+在论文中将同心圆划分为4个区域。每个区域包括Nrm * N
+最内层区域和最外层区域的网格划分较稀疏，来解决远距离稀疏和近距离可表示的问题，同时减少了bin(网格)的数量
+
+#### R-GPF
+Region-wise Ground Plane Fitting 区域级的地面拟合
+每个bin通过R-GPF来进行估计，之后合并部分地面点。使用Principal Component Analysis(PCA)主成分分析，相比RANSAC更快(至少2倍)。
+
+C是一个bin中点云的协方差矩阵，计算出C的3个特征值和特征向量。**对应于最小特征值的特征向量是最有可能表示对应于地面层的法向量n**。根据法向量n和单位空间的平均点计算平面系数d。
+将高度最低的bin作为地表。
+**初始估计到底怎么实现的??**
+迭代估计地面点云。第l次迭代得到的**地面(估计)点云的法向量(normal vector)**， 之后计算**平面系数**。
+之后迭代计算第l + 1次迭代。
+paper中迭代3次？
+相比原版R-GPF，使用了自适应的初始seed，防止收敛到局部最小。
+
+**过滤由于Lidar本身缺陷导致的位于真实地面以下的点云。**
+
+
+#### GLE
+Ground Likelihood Estimation
+对于二分类，区域级的随机测试，来改善整体预测准确率，排除包含非地面点的初始(unintended planes)
+
+对预测结果进行uprightness(直立度)，elevation(高程)， flatness(平面度)指标计算。
+
+- Uprightness
+法向量是否趋向于传感器的XY平面, 法向量与[0, 0, 1]求夹角。设置一个直立裕度(uprightness margin)，相当于根据夹角阈值进行判断
+- Elevation
+由于直立度无法区分汽车顶，引擎盖等平面和地面的区别；以及当大型物体遮挡时，产生部分观测问题。即部分点云被预测为平面，部分不是，主要是为了去除FP
+使用一个条件逻辑函数**conditional logistic function**. 传感器附近高度平均值比-hs高，可能不是地面？  感觉公式有问题，指数分子多一个负号？
+对距离中心较近的区域才可以使用该方法
+- Flatess
+主要是为了恢复可能被Elevation过滤的FN，比如陡坡。设置表面变量阈值，阈值依赖Zm(区域)，通过这样，陡坡的GLE增加。
+
+根据GLE是否大于0.5来对初步预测结果进行过滤(逻辑与？)
+
+
+kitti数据集中设置lane marking, road, parking, sidewalk, other ground, vegetation, and terrain类别的点为地面真值，植被高度低于-1.3的也被设置为地面点
+也在崎岖道路进行试验
+
+论文中kitti数据集算法性能达到43.97Hz ??
+
+
+
+
+
+
+
+
 

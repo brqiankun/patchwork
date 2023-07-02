@@ -308,7 +308,7 @@ paper中迭代3次？
 Ground Likelihood Estimation
 对于二分类，区域级的随机测试，来改善整体预测准确率，排除包含非地面点的初始(unintended planes)
 
-对预测结果进行uprightness(直立度)，elevation(高程)， flatness(平面度)指标计算。
+对预测结果进行uprightness(直立度)，elevation(高程)， flatness(平面度)指标计算。以下3个指标的乘积
 
 - Uprightness
 法向量是否趋向于传感器的XY平面, 法向量与[0, 0, 1]求夹角。设置一个直立裕度(uprightness margin)，相当于根据夹角阈值进行判断
@@ -327,11 +327,164 @@ kitti数据集中设置lane marking, road, parking, sidewalk, other ground, vege
 
 论文中kitti数据集算法性能达到43.97Hz ??
 
+主要主要部分先看node/offline_kitti.cpp
+
+
+bairui@DESKTOP-TCT7SII:~/program/patchwork_ws/src/patchwork/launch$ roslaunch patchwork offline_kitti.launch
+... logging to /home/bairui/.ros/log/8a850d8a-18b4-11ee-a9b6-59902c089f0f/roslaunch-DESKTOP-TCT7SII-3839.log
+Checking log directory for disk usage. This may take a while.
+Press Ctrl-C to interrupt
+Done checking log file disk usage. Usage is <1GB.
+
+started roslaunch server http://DESKTOP-TCT7SII:46691/
+
+SUMMARY
+========
+
+PARAMETERS
+ * /algorithm: patchwork
+ * /data_path: /mnt/d/bairui/brf...
+ * /end_frame: 4531
+ * /extrinsic_rot: [1, 0, 0, 0, 1, 0...
+ * /extrinsic_trans: [0.0, 0.0, 0.0]
+ * /patchwork/ATAT/ATAT_ON: True
+ * /patchwork/ATAT/max_r_for_ATAT: 5.0
+ * /patchwork/ATAT/noise_bound: 0.2
+ * /patchwork/ATAT/num_sectors_for_ATAT: 20
+ * /patchwork/adaptive_seed_selection_margin: -1.1
+ * /patchwork/czm/elevation_thresholds: [0.523, 0.746, 0....
+ * /patchwork/czm/flatness_thresholds: [0.0005, 0.000725...
+ * /patchwork/czm/min_ranges_each_zone: [2.7, 12.3625, 22...
+ * /patchwork/czm/num_rings_each_zone: [2, 4, 4, 4]
+ * /patchwork/czm/num_sectors_each_zone: [16, 32, 54, 32]
+ * /patchwork/czm/num_zones: 4
+ * /patchwork/global_elevation_threshold: -0.5
+ * /patchwork/max_r: 80.0
+ * /patchwork/min_r: 2.7
+ * /patchwork/mode: czm
+ * /patchwork/num_iter: 3
+ * /patchwork/num_lpr: 20
+ * /patchwork/num_min_pts: 10
+ * /patchwork/th_dist: 0.125
+ * /patchwork/th_seeds: 0.5
+ * /patchwork/uniform/num_rings: 16
+ * /patchwork/uniform/num_sectors: 54
+ * /patchwork/uprightness_thr: 0.707
+ * /patchwork/using_global_elevation: False
+ * /patchwork/verbose: True
+ * /patchwork/visualize: True
+ * /rosdistro: noetic
+ * /rosversion: 1.16.0
+ * /save_flag: False
+ * /sensor_height: 1.723
+ * /start_frame: 4390
+ * /use_sor_before_save: False
+
+NODES
+  /
+    offline_kitti_DESKTOP_TCT7SII_3839_2541184660714628809 (patchwork/offline_kitti)
+    rviz (rviz/rviz)
+
+auto-starting new master
+process[master]: started with pid [3847]
+ROS_MASTER_URI=http://localhost:11311
+
+setting /run_id to 8a850d8a-18b4-11ee-a9b6-59902c089f0f
+process[rosout-1]: started with pid [3857]
+started core service [/rosout]
+process[offline_kitti_DESKTOP_TCT7SII_3839_2541184660714628809-2]: started with pid [3864]
+process[rviz-3]: started with pid [3865]
+/mnt/d/bairui/brfile/dataset/kitti_odometry_data/dataset/sequences/00/patchwork
+[ INFO] [1688287420.582783411]: Inititalizing PatchWork...
+Global thr. is not in use
+[ INFO] [1688287420.590999034]: Sensor Height: 1.723000
+[ INFO] [1688287420.591037078]: Num of Iteration: 3
+[ INFO] [1688287420.591051886]: Num of LPR: 20
+[ INFO] [1688287420.591056645]: Num of min. points: 10
+[ INFO] [1688287420.591080251]: Seeds Threshold: 0.500000
+[ INFO] [1688287420.591096312]: Distance Threshold: 0.125000
+[ INFO] [1688287420.591122062]: Max. range:: 80.000000
+[ INFO] [1688287420.591144695]: Min. range:: 2.700000
+[ INFO] [1688287420.591176216]: Num. rings: 16
+[ INFO] [1688287420.591199751]: Num. sectors: 54
+[ INFO] [1688287420.591207687]: adaptive_seed_selection_margin: -1.100000
+[ INFO] [1688287420.592633808]: Uprightness threshold: 0.707000
+[ INFO] [1688287420.592711629]: Elevation thresholds: 0.523000 0.746000 0.879000 1.125000
+[ INFO] [1688287420.592722540]: Flatness thresholds: 0.000500 0.000725 0.001000 0.001000
+[ INFO] [1688287420.592729283]: Num. zones: 4
+INITIALIZATION COMPLETE
+Target data: /mnt/d/bairui/brfile/dataset/kitti_odometry_data/dataset/sequences/00
+Total 4541 files are loaded
+4390th node come
+Operating patchwork...
+[ATAT] The sensor height is auto-calibrated via the ground points in the vicinity of the vehicle
+[ATAT] Elevation of the ground w.r.t. the origin is -1.80045 m
+[Elevation] Rejection operated. Check 1th param. of elevation_thr_: -1.05445 < -0.8805
+[Elevation] Rejection operated. Check 1th param. of elevation_thr_: -1.05445 < -0.933964
+[Elevation] Rejection operated. Check 1th param. of elevation_thr_: -1.05445 < -0.809963
+[Elevation] Rejection operated. Check 2th param. of elevation_thr_: -0.92145 < -0.245881
+[Elevation] Rejection operated. Check 3th param. of elevation_thr_: -0.67545 < -0.653252
+[Elevation] Rejection operated. Check 3th param. of elevation_thr_: -0.67545 < -0.00551152
+[Elevation] Rejection operated. Check 3th param. of elevation_thr_: -0.67545 < 0.180265
+4390th,  takes : 0.0185709 | 125883 -> 65936
+ P: 95.983 | R: 97.8682
+4391th node come
+Operating patchwork...
+[Elevation] Rejection operated. Check 1th param. of elevation_thr_: -1.05445 < -0.990845
+[Elevation] Rejection operated. Check 1th param. of elevation_thr_: -1.05445 < -0.896369
+[Elevation] Rejection operated. Check 1th param. of elevation_thr_: -1.05445 < -0.958216
+[Elevation] Rejection operated. Check 1th param. of elevation_thr_: -1.05445 < -0.778562
+[Elevation] Rejection operated. Check 2th param. of elevation_thr_: -0.92145 < -0.917277
+[Elevation] Rejection operated. Check 2th param. of elevation_thr_: -0.92145 < -0.383513
+[Elevation] Rejection operated. Check 2th param. of elevation_thr_: -0.92145 < -0.340128
+[Elevation] Rejection operated. Check 3th param. of elevation_thr_: -0.67545 < -0.257407
+[Elevation] Rejection operated. Check 3th param. of elevation_thr_: -0.67545 < -0.600639
+[Elevation] Rejection operated. Check 3th param. of elevation_thr_: -0.67545 < 0.498076
+[Elevation] Rejection operated. Check 3th param. of elevation_thr_: -0.67545 < -0.211398
+4391th,  takes : 0.0129337 | 126047 -> 66166
+ P: 96.7848 | R: 97.997
+4392th node come
+Operating patchwork...
+[Elevation] Rejection operated. Check 1th param. of elevation_thr_: -1.05445 < -1.01822
+[Elevation] Rejection operated. Check 1th param. of elevation_thr_: -1.05445 < -0.930802
+[Elevation] Rejection operated. Check 1th param. of elevation_thr_: -1.05445 < -0.982111
+[Elevation] Rejection operated. Check 1th param. of elevation_thr_: -1.05445 < -0.845766
+[Elevation] Rejection operated. Check 2th param. of elevation_thr_: -0.92145 < -0.870446
+[Elevation] Rejection operated. Check 2th param. of elevation_thr_: -0.92145 < -0.766523
+[Elevation] Rejection operated. Check 2th param. of elevation_thr_: -0.92145 < -0.806332
+[Elevation] Rejection operated. Check 3th param. of elevation_thr_: -0.67545 < -0.169969
+[Elevation] Rejection operated. Check 3th param. of elevation_thr_: -0.67545 < -0.562176
+4392th,  takes : 0.0145104 | 126258 -> 66655
+ P: 96.9177 | R: 97.5083
+4393th node come
+Operating patchwork...
+[Elevation] Rejection operated. Check 1th param. of elevation_thr_: -1.05445 < -0.834547
+[Elevation] Rejection operated. Check 1th param. of elevation_thr_: -1.05445 < -0.982643
+[Elevation] Rejection operated. Check 1th param. of elevation_thr_: -1.05445 < -0.923897
+[Elevation] Rejection operated. Check 2th param. of elevation_thr_: -0.92145 < -0.863346
+[Elevation] Rejection operated. Check 2th param. of elevation_thr_: -0.92145 < -0.208551
+[Elevation] Rejection operated. Check 3th param. of elevation_thr_: -0.67545 < -0.158848
+[Elevation] Rejection operated. Check 3th param. of elevation_thr_: -0.67545 < -0.549187
+[Elevation] Rejection operated. Check 3th param. of elevation_thr_: -0.67545 < -0.0636977
+[Elevation] Rejection operated. Check 3th param. of elevation_thr_: -0.67545 < -0.112025
+4393th,  takes : 0.0142503 | 126187 -> 67999
+ P: 96.5317 | R: 97.8323
+4394th node come
+Operating patchwork...
+[Elevation] Rejection operated. Check 1th param. of elevation_thr_: -1.05445 < -0.804482
+[Elevation] Rejection operated. Check 1th param. of elevation_thr_: -1.05445 < -0.99653
+[Elevation] Rejection operated. Check 1th param. of elevation_thr_: -1.05445 < -0.933367
+[Elevation] Rejection operated. Check 2th param. of elevation_thr_: -0.92145 < -0.42435
+4394th,  takes : 0.0132065 | 126058 -> 68610
+ P: 96.5863 | R: 97.7964
 
 
 
+用来保存Zone的其实是一个二维vector
+patches[j][i]表示当前zone中第j个ring中的第i个sector
 
 
 
+**什么是LPR？**
 
-
+covariance matrix是什么？

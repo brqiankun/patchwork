@@ -11,6 +11,7 @@
 #include <signal.h>
 #include "label_generator/label_generator.hpp"
 
+#include "dbg.h"
 
 using PointType = PointXYZILID;
 using namespace std;
@@ -94,8 +95,10 @@ sensor_msgs::PointCloud2 cloud2msg(pcl::PointCloud<T> cloud, std::string frame_i
 int main(int argc, char**argv) {
     ros::init(argc, argv, "Offline KITTI");
 
+    // When the first ros::NodeHandle is created it will call ros::start(), and when the last ros::NodeHandle is destroyed, it will call ros::shutdown().
     ros::NodeHandle nh;
     int start_frame, end_frame;
+    // Assign value from parameter server, with default.
     nh.param<int>("/start_frame", start_frame, 0);
     nh.param<int>("/end_frame", end_frame, 10000);
     nh.param<bool>("/save_flag", save_flag, false);
@@ -104,6 +107,7 @@ int main(int argc, char**argv) {
     nh.param<string>("/seq", seq, "00");
     nh.param<string>("/data_path", data_path, "/");
 
+    // Advertise a topic, simple version. return a Publisher
     CloudPublisher     = nh.advertise<sensor_msgs::PointCloud2>("/benchmark/cloud", 100, true);
     TPPublisher        = nh.advertise<sensor_msgs::PointCloud2>("/benchmark/TP", 100, true);
     FPPublisher        = nh.advertise<sensor_msgs::PointCloud2>("/benchmark/FP", 100, true);
@@ -114,9 +118,10 @@ int main(int argc, char**argv) {
     EstGroundPublisher         = nh.advertise<sensor_msgs::PointCloud2>("/estimate/ground", 100, true);
     EstGroundFilteredPublisher = nh.advertise<sensor_msgs::PointCloud2>("/estimate/ground_filtered", 100, true);
 
-    signal(SIGINT, signal_callback_handler);
+    signal(SIGINT, signal_callback_handler);    // 设置ctrl + C 回调函数
 
     string abs_save_dir = data_path + "/patchwork";
+    dbg(abs_save_dir);
     std::cout << "\033[1;34m" << abs_save_dir << "\033[0m" << std::endl;
     std::experimental::filesystem::create_directory(abs_save_dir);
 
@@ -128,13 +133,13 @@ int main(int argc, char**argv) {
     for (int n = max(0, start_frame); n < min(N, end_frame); ++n) {
         cout << n << "th node come" << endl;
         pcl::PointCloud<PointType> pc_curr;
-        loader.get_cloud(n, pc_curr);
+        loader.get_cloud(n, pc_curr);    // 点云读入pc_curr中
         pcl::PointCloud<PointType> pc_ground;
         pcl::PointCloud<PointType> pc_non_ground;
 
         static double time_taken;
         cout << "Operating patchwork..." << endl;
-        PatchworkGroundSeg->estimate_ground(pc_curr, pc_ground, pc_non_ground, time_taken);
+        PatchworkGroundSeg->estimate_ground(pc_curr, pc_ground, pc_non_ground, time_taken);  // 算法核心部分
 
         // Estimation
         double precision, recall, precision_naive, recall_naive;

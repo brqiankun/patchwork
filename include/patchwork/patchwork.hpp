@@ -11,6 +11,8 @@
 #include <pcl/common/centroid.h>
 #include <pcl/io/pcd_io.h>
 
+#include <dbg.h>
+
 #define MARKER_Z_VALUE -2.2
 #define UPRIGHT_ENOUGH 0.55 // cyan
 #define FLAT_ENOUGH 0.2 // green
@@ -93,6 +95,7 @@ public:
         ROS_INFO("adaptive_seed_selection_margin: %f", adaptive_seed_selection_margin_);
 
         // CZM denotes 'Concentric Zone Model'. Please refer to our paper
+        // Get a value from the parameter server
         node_handle_.getParam("/patchwork/czm/num_zones", num_zones_);
         node_handle_.getParam("/patchwork/czm/num_sectors_each_zone", num_sectors_each_zone_);
         node_handle_.getParam("/patchwork/czm/num_rings_each_zone", num_rings_each_zone_);
@@ -122,7 +125,7 @@ public:
         regionwise_ground_.reserve(NUM_HEURISTIC_MAX_PTS_IN_PATCH);
         regionwise_nonground_.reserve(NUM_HEURISTIC_MAX_PTS_IN_PATCH);
 
-        PlaneViz      = node_handle_.advertise<jsk_recognition_msgs::PolygonArray>("/gpf/plane", 100);
+        PlaneViz      = node_handle_.advertise<jsk_recognition_msgs::PolygonArray>("/gpf/plane", 100);   // 发布R-GPF拟合结果
         revert_pc_pub = node_handle_.advertise<sensor_msgs::PointCloud2>("/revert_pc", 100);
         reject_pc_pub = node_handle_.advertise<sensor_msgs::PointCloud2>("/reject_pc", 100);
 
@@ -131,14 +134,16 @@ public:
         min_range_z4_ = min_ranges_[3];
 
         min_ranges_   = {min_range_, min_range_z2_, min_range_z3_, min_range_z4_};
+        // 环形区域
         ring_sizes_   = {(min_range_z2_ - min_range_) / num_rings_each_zone_.at(0),
                          (min_range_z3_ - min_range_z2_) / num_rings_each_zone_.at(1),
                          (min_range_z4_ - min_range_z3_) / num_rings_each_zone_.at(2),
                          (max_range_ - min_range_z4_) / num_rings_each_zone_.at(3)};
+        // 扇形区域
         sector_sizes_ = {2 * M_PI / num_sectors_each_zone_.at(0), 2 * M_PI / num_sectors_each_zone_.at(1),
                          2 * M_PI / num_sectors_each_zone_.at(2),
                          2 * M_PI / num_sectors_each_zone_.at(3)};
-        cout << "INITIALIZATION COMPLETE" << endl;
+        cout << "INITIALIZATION COMPLETE" << endl;    // 以上为初始化参数
 
         for (int iter = 0; iter < num_zones_; ++iter) {
             Zone z;
@@ -215,7 +220,7 @@ private:
     jsk_recognition_msgs::PolygonArray poly_list_;
 
     ros::Publisher          PlaneViz, revert_pc_pub, reject_pc_pub;
-    pcl::PointCloud<PointT> revert_pc, reject_pc;
+    pcl::PointCloud<PointT> revert_pc, reject_pc;   // 从FN中恢复的点云，从FP中拒绝的点云
     pcl::PointCloud<PointT> ground_pc_;
     pcl::PointCloud<PointT> non_ground_pc_;
 
@@ -277,15 +282,15 @@ private:
 
 template<typename PointT>
 inline
-void PatchWork<PointT>::initialize_zone(Zone &z, int num_sectors, int num_rings) {
+void PatchWork<PointT>::initialize_zone(Zone &z, int num_sectors, int num_rings) {  //初始化同心圆区域
     z.clear();
     pcl::PointCloud<PointT> cloud;
     cloud.reserve(1000);
     Ring     ring;
-    for (int i = 0; i < num_sectors; i++) {
+    for (int i = 0; i < num_sectors; i++) {   // 每个ring生成多少个sector
         ring.emplace_back(cloud);
     }
-    for (int j = 0; j < num_rings; j++) {
+    for (int j = 0; j < num_rings; j++) {    //  当前zone生成多少个ring
         z.emplace_back(ring);
     }
 }
@@ -303,20 +308,22 @@ void PatchWork<PointT>::flush_patches_in_zone(Zone &patches, int num_sectors, in
 template<typename PointT>
 inline
 void PatchWork<PointT>::estimate_plane_(const pcl::PointCloud<PointT> &ground) {
-    pcl::computeMeanAndCovarianceMatrix(ground, cov_, pc_mean_);
+    pcl::computeMeanAndCovarianceMatrix(ground, cov_, pc_mean_);    // 求出当前估计地面点云的cov_矩阵 covariance matrix
     // Singular Value Decomposition: SVD
     Eigen::JacobiSVD<Eigen::MatrixXf> svd(cov_, Eigen::DecompositionOptions::ComputeFullU);
     singular_values_ = svd.singularValues();
 
     // use the least singular vector as normal
+    // 得到最小特征值对应的特征向量
     normal_ = (svd.matrixU().col(2));
     // mean ground seeds value
     Eigen::Vector3f seeds_mean = pc_mean_.head<3>();
 
     // according to normal.T*[x,y,z] = -d
+    // 得到plane coefficient 平面系数
     d_         = -(normal_.transpose() * seeds_mean)(0, 0);
     // set distance threhold to `th_dist - d`
-    th_dist_d_ = th_dist_ - d_;
+    th_dist_d_ = th_dist_ - d_;   // Md - dln
 }
 
 template<typename PointT>
@@ -338,7 +345,7 @@ void PatchWork<PointT>::extract_initial_seeds_(
         if (zone_idx == 0) {
             for (int i = 0; i < p_sorted.points.size(); i++) {
                 if (p_sorted.points[i].z < lowest_h_margin_in_close_zone) {
-                    ++init_idx;
+                    ++init_idx;    // 跳过z小于lowest_h_margin_in_close_zone的点，去除平面以下的点？
                 } else {
                     break;
                 }
@@ -354,6 +361,7 @@ void PatchWork<PointT>::extract_initial_seeds_(
     double   lpr_height = cnt != 0 ? sum / cnt : 0;// in case divide by 0
 
     // iterate pointcloud, filter those height is less than lpr.height+th_seeds_
+    // 设置初始种子点云(初始设置为地面点)
     for (int i = 0; i < p_sorted.points.size(); i++) {
         if (p_sorted.points[i].z < lpr_height + th_seeds_) {
             init_seeds.points.push_back(p_sorted.points[i]);
@@ -481,6 +489,7 @@ void PatchWork<PointT>::estimate_sensor_height(pcl::PointCloud<PointT> cloud_in)
 
     // Note that these are opposites
     sensor_height_ = -estimated_h;
+    dbg(sensor_height_);
 }
 
 template<typename PointT>
@@ -497,7 +506,7 @@ void PatchWork<PointT>::estimate_ground(
     if (!poly_list_.likelihood.empty()) poly_list_.likelihood.clear();
 
     if (initialized_ && ATAT_ON_) {
-        estimate_sensor_height(cloud_in);
+        estimate_sensor_height(cloud_in);        // ???
         initialized_ = false;
     }
 
@@ -533,6 +542,7 @@ void PatchWork<PointT>::estimate_ground(
     t1 = ros::Time::now().toSec();
     // 4. pointcloud -> regionwise setting
     for (int k = 0; k < num_zones_; ++k) {
+        // 先将czm清空
         flush_patches_in_zone(ConcentricZoneModel_[k], num_sectors_each_zone_[k], num_rings_each_zone_[k]);
     }
     pc2czm(laserCloudIn, ConcentricZoneModel_);
@@ -549,16 +559,18 @@ void PatchWork<PointT>::estimate_ground(
         auto          zone     = ConcentricZoneModel_[k];
         for (uint16_t ring_idx = 0; ring_idx < num_rings_each_zone_[k]; ++ring_idx) {
             for (uint16_t sector_idx = 0; sector_idx < num_sectors_each_zone_[k]; ++sector_idx) {
-                if (zone[ring_idx][sector_idx].points.size() > num_min_pts_) {
+                if (zone[ring_idx][sector_idx].points.size() > num_min_pts_) {   // 扇形区域内点云数量大于可以处理的最小数量再进行处理
                     double t_tmp0 = ros::Time::now().toSec();
                     // 22.05.02 update
                     // Region-wise sorting is adopted
+                    // 对每个扇区内的点按照z坐标大小进行从小到大排序
                     sort(zone[ring_idx][sector_idx].points.begin(), zone[ring_idx][sector_idx].end(), point_z_cmp<PointT>);
+                    // R-GPF
                     extract_piecewiseground(k, zone[ring_idx][sector_idx], regionwise_ground_, regionwise_nonground_);
                     double t_tmp1 = ros::Time::now().toSec();
                     t_total_ground += t_tmp1 - t_tmp0;
 
-                    // Status of each patch
+                    // Status of each patch   GLE
                     // used in checking uprightness, elevation, and flatness, respectively
                     const double ground_z_vec       = abs(normal_(2, 0));
                     const double ground_z_elevation = pc_mean_(2, 0);
@@ -670,7 +682,7 @@ double PatchWork<PointT>::xy2theta(const double &x, const double &y) { // 0 ~ 2 
           return 2 * M_PI + atan2(y, x);// 3, 4 quadrant
       }
     */
-    auto atan_value = atan2(y,x); // EDITED!
+    auto atan_value = atan2(y,x); // EDITED!    // 返回反正切值 (-pi, pi]
     return atan_value > 0 ? atan_value : atan_value + 2*M_PI; // EDITED!
 }
 
@@ -684,6 +696,8 @@ template<typename PointT>
 inline
 void PatchWork<PointT>::pc2czm(const pcl::PointCloud<PointT> &src, std::vector<Zone> &czm) {
 
+    // for循环处理每个点也太低效了吧!
+    // 将点云保存进CZM中
     for (auto const &pt : src.points) {
         int    ring_idx, sector_idx;
         double r = xy2radius(pt.x, pt.y);
@@ -717,23 +731,25 @@ template<typename PointT>
 inline
 void PatchWork<PointT>::extract_piecewiseground(
         const int zone_idx, const pcl::PointCloud<PointT> &src,
-        pcl::PointCloud<PointT> &dst,
-        pcl::PointCloud<PointT> &non_ground_dst,
+        pcl::PointCloud<PointT> &dst,      // 预测地面点
+        pcl::PointCloud<PointT> &non_ground_dst,   // 剩余非地面点
         bool is_h_available) {
     // 0. Initialization
     if (!ground_pc_.empty()) ground_pc_.clear();
     if (!dst.empty()) dst.clear();
     if (!non_ground_dst.empty()) non_ground_dst.clear();
 
-    // 1. set seeds!
+    // 1. set seeds!  初始地面点ground_pc_
     extract_initial_seeds_(zone_idx, src, ground_pc_, is_h_available);
 
     // 2. Extract ground
+    // 迭代次数 paper中为3
     for (int i = 0; i < num_iter_; i++) {
-        estimate_plane_(ground_pc_);
+        estimate_plane_(ground_pc_);   // 得到当前预测平面的平面系数d_
         ground_pc_.clear();
 
         //pointcloud to matrix
+        // 点云坐标用矩阵表示
         Eigen::MatrixXf points(src.points.size(), 3);
         int             j      = 0;
         for (auto       &p:src.points) {
@@ -744,7 +760,7 @@ void PatchWork<PointT>::extract_piecewiseground(
         // threshold filter
         for (int        r      = 0; r < result.rows(); r++) {
             if (i < num_iter_ - 1) {
-                if (result[r] < th_dist_d_) {
+                if (result[r] < th_dist_d_) {    // -d^k < Md - dnl
                     ground_pc_.points.push_back(src[r]);
                 }
             } else { // Final stage

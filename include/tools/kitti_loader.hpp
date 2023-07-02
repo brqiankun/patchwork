@@ -52,6 +52,7 @@ public:
         fclose(file);
 
         cloud.points.resize(num_points);
+        // 针对不同的T类型，从点云文件中读出信息填入点云pt中
         if (std::is_same<T, pcl::PointXYZ>::value) {
             for (int i = 0; i < num_points; i++) {
                 auto &pt = cloud.at(i);

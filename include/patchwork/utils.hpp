@@ -95,7 +95,7 @@ int count_num_ground(const pcl::PointCloud<PointXYZILID>& pc){
     iter = std::find(ground_classes.begin(), ground_classes.end(), pt.label);
     if (iter != ground_classes.end()){ // corresponding class is in ground classes
       if (pt.label == VEGETATION){
-        if (pt.z < VEGETATION_THR){
+        if (pt.z < VEGETATION_THR){   // 将植被的靠近地面部分的点也设置为ground点
            num_ground ++;
         }
       }else num_ground ++;
@@ -171,16 +171,16 @@ void calculate_precision_recall(const pcl::PointCloud<PointXYZILID>& pc_curr,
                                 double& recall,
                                 bool consider_outliers=true){
 
-  int num_ground_est = ground_estimated.points.size();
-  int num_ground_gt = count_num_ground(pc_curr);
-  int num_TP = count_num_ground(ground_estimated);
+  int num_ground_est = ground_estimated.points.size();    // 预测为ground的点云总数
+  int num_ground_gt = count_num_ground(pc_curr);          // 实际真值 gt的数量
+  int num_TP = count_num_ground(ground_estimated);        // 得到TP
   if (consider_outliers){
     int num_outliers_est = count_num_outliers(ground_estimated);
     precision = (double)(num_TP)/(num_ground_est - num_outliers_est) * 100;
     recall = (double)(num_TP)/num_ground_gt * 100;
   }else{
-    precision = (double)(num_TP)/num_ground_est * 100;
-    recall = (double)(num_TP)/num_ground_gt * 100;
+    precision = (double)(num_TP)/num_ground_est * 100;   // 得到准确率
+    recall = (double)(num_TP)/num_ground_gt * 100;       // 得到召回率
   }
 }
 

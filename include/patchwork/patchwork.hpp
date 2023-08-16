@@ -2,6 +2,7 @@
 #define PATCHWORK_H
 
 #include <iostream>
+#include <string>
 #include <sensor_msgs/PointCloud2.h>
 #include <ros/ros.h>
 #include <jsk_recognition_msgs/PolygonArray.h>
@@ -71,6 +72,7 @@ public:
         node_handle_.param("/patchwork/uprightness_thr", uprightness_thr_, 0.5); // The larger, the more strict
         node_handle_.param("/patchwork/adaptive_seed_selection_margin", adaptive_seed_selection_margin_,
                            -1.1); // The more larger, the more soft
+        node_handle_.param("/brtest/hello", brtest_hello_, true);
 
         // It is not in the paper
         // It is also not matched our philosophy, but it is employed to reject some FPs easily & intuitively.
@@ -93,6 +95,8 @@ public:
         ROS_INFO("Num. rings: %d", num_rings_);
         ROS_INFO("Num. sectors: %d", num_sectors_);
         ROS_INFO("adaptive_seed_selection_margin: %f", adaptive_seed_selection_margin_);
+        ROS_INFO("patchwork/verbose: %d", verbose_);
+        ROS_INFO("brtest_hello: %d", brtest_hello_);
 
         // CZM denotes 'Concentric Zone Model'. Please refer to our paper
         // Get a value from the parameter server
@@ -226,6 +230,8 @@ private:
 
     pcl::PointCloud<PointT> regionwise_ground_;
     pcl::PointCloud<PointT> regionwise_nonground_;
+
+    bool brtest_hello_;
 
     void check_input_parameters_are_correct();
 
@@ -505,8 +511,8 @@ void PatchWork<PointT>::estimate_ground(
     if (!poly_list_.polygons.empty()) poly_list_.polygons.clear();
     if (!poly_list_.likelihood.empty()) poly_list_.likelihood.clear();
 
-    if (initialized_ && ATAT_ON_) {
-        estimate_sensor_height(cloud_in);        // ???
+    if (initialized_ && ATAT_ON_) {   // 只在第一帧点云进行传感器高度评估
+        estimate_sensor_height(cloud_in);
         initialized_ = false;
     }
 
@@ -563,7 +569,7 @@ void PatchWork<PointT>::estimate_ground(
                     double t_tmp0 = ros::Time::now().toSec();
                     // 22.05.02 update
                     // Region-wise sorting is adopted
-                    // 对每个扇区内的点按照z坐标大小进行从小到大排序
+                    // 对每个区域中，每个环中，每个扇区中的点云按照z值从小到大
                     sort(zone[ring_idx][sector_idx].points.begin(), zone[ring_idx][sector_idx].end(), point_z_cmp<PointT>);
                     // R-GPF
                     extract_piecewiseground(k, zone[ring_idx][sector_idx], regionwise_ground_, regionwise_nonground_);

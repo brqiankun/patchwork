@@ -13,7 +13,7 @@
 </group>
 
 <node name="$(anon ros_kitti)" pkg="patchwork" type="ros_kitti" output="screen">
-    <remap from="/patchwork/cloud" to="/patchwork/cloud"/>
+    <remap from="/patchwork/cloud" to="/lidarcalib"/>
 </node>
 
 

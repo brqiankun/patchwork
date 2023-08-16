@@ -488,3 +488,18 @@ patches[j][i]表示当前zone中第j个ring中的第i个sector
 **什么是LPR？**
 
 covariance matrix是什么？
+r7000 电脑为何显示一段时间后卡死，是数据集用用光了吗, 点云数量太小程序提前结束
+
+`roslaunch patchwork offline_kitti.launch`
+
+算法核心在include里<br>
+include/tools/kitti_loader.hpp 中定义了将kitti xxx.bin文件读取为点云pcl点云格式
+
+roslaunch文件中
+<rosparam command="load" file="$(find patchwork)/config/params.yaml" />也会对参数进行设置
+
+
+通过rostopic进行点云输入，话题映射在roslaunch中修改
+```
+roslaunch patchwork run_patchwork.launch is_kitti:=false
+```
